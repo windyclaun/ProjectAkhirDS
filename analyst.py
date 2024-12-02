@@ -1,63 +1,48 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import classification_report, accuracy_score
-import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Membaca dataset
-df = pd.read_csv('hasil_scraping_tiket.csv')
+# Memuat data
+data1_path = "Dataset.xlsx"
+data2_path = "rating_kendaraan.xlsx"
 
-# Membersihkan dan mempersiapkan data
+data1 = pd.read_excel(data1_path)
+data2 = pd.read_excel(data2_path)
 
-# Menghapus kolom yang tidak relevan (jika ada kolom kosong atau tidak terpakai)
-df = df.dropna(axis=1, how='all')
+# Penyesuaian nama kolom sesuai dataset Anda
+data1.columns = [
+    'Nama_Kendaraan', 'Kapasitas_Koper', 'Kapasitas_Penumpang', 'Harga',
+    'Vendor_Rating', 'Review', 'Order', 'Fitur1', 'Fitur2', 'Fitur3',
+    'Harga_2', 'Hari', 'Lepas_Kunci', 'Sopir', 'Extra_Column'
+]
+data2.columns = ['Nama_Kendaraan', 'Rating']
 
-# Menangani missing values pada kolom yang numerik
-df['Harga (/hari)'] = df['Harga (/hari)'].str.replace('.', '')  # Menghapus titik (separator ribuan)
-df['Harga (/hari)'] = df['Harga (/hari)'].str.replace(',', '.')  # Mengubah koma ke titik untuk float
-df['Harga (/hari)'] = pd.to_numeric(df['Harga (/hari)'], errors='coerce')
+# Menggabungkan dataset berdasarkan nama kendaraan
+merged_data = pd.merge(data1, data2, on='Nama_Kendaraan', how='inner')
 
-# Menghapus baris dengan missing values pada kolom harga dan rating
-df = df.dropna(subset=['Harga (/hari)', 'Rating Mobil'])
+# Menggabungkan fitur deskripsi untuk analisis
+merged_data['Combined_Features'] = (
+    merged_data['Nama_Kendaraan'] + " " +
+    merged_data['Kapasitas_Koper'].astype(str) + " " +
+    merged_data['Kapasitas_Penumpang'].astype(str) + " " +
+    merged_data['Harga'] + " " +
+    merged_data['Fitur1'].fillna('') + " " +
+    merged_data['Fitur2'].fillna('') + " " +
+    merged_data['Fitur3'].fillna('')
+)
 
-# Mengonversi kolom Rating Mobil menjadi numerik
-df['Rating Mobil'] = pd.to_numeric(df['Rating Mobil'], errors='coerce')
+# Menghitung TF-IDF
+tfidf = TfidfVectorizer(stop_words='english')
+tfidf_matrix = tfidf.fit_transform(merged_data['Combined_Features'])
 
-# Mengonversi kolom lainnya jika perlu
-df['Penumpang'] = pd.to_numeric(df['Penumpang'], errors='coerce')
-df['Bagasi'] = pd.to_numeric(df['Bagasi'], errors='coerce')
+# Menghitung Cosine Similarity
+cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
 
-# Menangani missing values pada kolom Penumpang dan Bagasi
-df['Penumpang'].fillna(df['Penumpang'].median(), inplace=True)
-df['Bagasi'].fillna(df['Bagasi'].median(), inplace=True)
-
-# Fitur yang digunakan untuk KNN (Harga per hari, Penumpang, Bagasi, Rating Mobil)
-X = df[['Harga (/hari)', 'Penumpang', 'Bagasi', 'Rating Mobil']]
-
-# Label (kategori yang ingin diprediksi, misalnya 'Jenis Kendaraan')
-# Di sini kita menggunakan rating mobil sebagai label
-y = df['Rating Mobil']  # Menggunakan rating mobil sebagai label untuk klasifikasi
-
-# Membagi data menjadi data latih dan data uji
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-# Normalisasi atau Scaling data (karena KNN sensitif terhadap skala fitur)
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
-
-# Melatih model KNN
-knn = KNeighborsClassifier(n_neighbors=3)
-knn.fit(X_train, y_train)
-
-# Prediksi menggunakan data uji
-y_pred = knn.predict(X_test)
-
-# Evaluasi model
-print("Accuracy:", accuracy_score(y_test, y_pred))
-print("Classification Report:\n", classification_report(y_test, y_pred))
-
-# Menyimpan hasil prediksi ke dalam file CSV
-df['Prediksi Rating Mobil'] = knn.predict(scaler.transform(df[['Harga (/hari)', 'Penumpang', 'Bagasi', 'Rating Mobil']]))
-df.to_csv('prediksi_rating_mobil.csv', index=False)
+# Fungsi rekomendasi
+def recommend_kendaraan(kendaraan_name, cosine_sim=cosine_sim):
+    idx = merged_data[merged_data['Nama_Kendaraan'] == kendaraan_name].index[0]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    sim_scores = sim_scores[1:6]  # 5 kendaraan teratas
+    kendaraan_indices = [i[0] for i in sim_scores]
+    return merged_data.iloc[kendaraan_indices][['Nama_Kendaraan', 'Rating']]
