@@ -4,6 +4,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 # Memuat data
 data1_path = "Dataset.xlsx"
@@ -64,7 +65,6 @@ merged_data['Combined_Features'] = (
     merged_data['Fitur3'].fillna('')
 )
 
-
 # Menghitung TF-IDF
 tfidf = TfidfVectorizer(stop_words='english')
 tfidf_matrix = tfidf.fit_transform(merged_data['Combined_Features'])
@@ -93,14 +93,49 @@ def recommend_kendaraan_by_price_and_keyword(harga_min, harga_max, keyword, cosi
     
     return filtered_data.iloc[kendaraan_indices][['Nama_Kendaraan', 'Rating', 'Harga']]
 
+# Menentukan relevansi berdasarkan Rating (misalnya rating > 4 dianggap relevan)
+def is_relevant(row, threshold=4):
+    return 1 if row['Rating'] > threshold else 0
+
+# Fungsi untuk evaluasi menggunakan Precision, Recall, dan F1-Score
+def evaluate_recommendations(predictions, ground_truth, threshold=4):
+    # Membuat label relevansi untuk hasil rekomendasi
+    predictions['relevant'] = predictions['Rating'].apply(is_relevant, threshold=threshold)
+    
+    # Membuat label relevansi untuk data ground truth
+    ground_truth['relevant'] = ground_truth['Rating'].apply(is_relevant, threshold=threshold)
+    
+    # Menghitung Precision, Recall, dan F1-Score
+    y_true = ground_truth['relevant']
+    y_pred = predictions['relevant']
+    
+    precision = precision_score(y_true, y_pred)
+    recall = recall_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
+    
+    return precision, recall, f1
+
 # Input dari pengguna
 harga_min = float(input("Masukkan harga minimum: "))
 harga_max = float(input("Masukkan harga maksimum: "))
 keyword = input("Masukkan keyword (misal nama kendaraan atau fitur): ")
 
 # Mendapatkan rekomendasi
-recommended = recommend_kendaraan_by_price_and_keyword(harga_min, harga_max, keyword)
+recommended_data = recommend_kendaraan_by_price_and_keyword(harga_min, harga_max, keyword)
 
-# Menampilkan rekomendasi
+# Ground truth (dari data2 yang sudah ada)
+ground_truth_data = merged_data[['Nama_Kendaraan', 'Rating']]
+
+# Evaluasi
+precision, recall, f1 = evaluate_recommendations(recommended_data, ground_truth_data)
+
+# Menampilkan rekomendasi dan hasil evaluasi
 print(f"Rekomendasi berdasarkan harga dan keyword '{keyword}':")
-print(recommended)
+print(recommended_data)
+
+print(f"Precision: {precision}")
+print(f"Recall: {recall}")
+print(f"F1-Score: {f1}")
+print(f"Precision: {precision}")
+print(f"Recall: {recall}")
+print(f"F1-Score: {f1}")
