@@ -9,7 +9,7 @@ data2_path = "rating_kendaraan.xlsx"
 data1 = pd.read_excel(data1_path)
 data2 = pd.read_excel(data2_path)
 
-# Penyesuaian nama kolom sesuai dataset Anda
+# Penyesuaian nama kolom sesuai dataset
 data1.columns = [
     'Nama_Kendaraan', 'Kapasitas_Koper', 'Kapasitas_Penumpang', 'Harga',
     'Vendor_Rating', 'Review', 'Order', 'Fitur1', 'Fitur2', 'Fitur3',
