@@ -91,6 +91,7 @@ def recommend_kendaraan_by_price_and_keyword(harga_min, harga_max, keyword, cosi
     sim_scores = sim_scores[1:11]  # 10 kendaraan teratas
     kendaraan_indices = [i[0] for i in sim_scores]
     
+    # Mengembalikan rekomendasi kendaraan
     return filtered_data.iloc[kendaraan_indices][['Nama_Kendaraan', 'Rating', 'Harga']]
 
 # Input dari pengguna

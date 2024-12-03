@@ -1,0 +1,558 @@
+---
+title: "Project"
+author: "Muhammad Oscar Fileas J"
+date: "2024-12-02"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## DATA GATHERING
+```{r}
+library(dplyr)
+library(tidymodels)
+library(tidyverse)
+library(readxl)
+library(VIM)
+
+data_awal = read_excel("Dataset.xlsx");
+data_awal
+str(data_awal)
+
+```
+
+## DATA PREPROCESSING
+```{r}
+##menghilangkan kolom field5
+data_process = data_awal %>% select(Field1, Field2, Field3, Vendor, Rating, Review, Order, Fitur, Fitur2, Fitur3, Harga, Hari, `Lepas Kunci`, Sopir)
+```
+
+```{r}
+##Merename nama kolom
+colnames(data_process)[colnames(data_awal) %in% c("Field1", "Field2", "Field3")] <- c("Nama_Kendaraan", "Bagasi", "Penumpang")
+
+##Mengedit data
+data_process$Harga = as.numeric(gsub("IDR ", "", gsub("\\.", "", data_process$Harga)))
+
+data_process$Rating = as.numeric(gsub(",", ".", gsub(".*\\s", "", data_process$Rating)))
+
+data_process$Review = as.numeric(gsub("[^0-9]", "", data_process$Review))
+
+data_process$Order = as.numeric(gsub("[^0-9]", "", data_process$Order))
+
+#Menghapus baris motor
+
+keywords = c("Vario", "Scoopy", "Beat", "NMax", "NMAX")
+
+pattern = paste(keywords, collapse = "|")
+
+data_process = data_process[!grepl(pattern, data_process$Nama_Kendaraan), ]
+
+##data_count_kendaraan = data_awal %>% count(Nama_Kendaraan)
+
+```
+
+```{r}
+##Data Cleaning
+data_clean =  data_process[!is.na(data_process$Vendor), ]
+imputed_data <- kNN(data_clean[, c("Fitur", "Fitur2", "Fitur3")], k = 5)
+
+# Cek dimensi imputed_data
+dim(imputed_data)  # Pastikan bahwa hasil imputasi memiliki dimensi yang benar
+
+# Mengganti kolom-kolom yang diimputasi dengan data yang telah terimputasi
+data_clean$Fitur <- imputed_data$Fitur
+data_clean$Fitur2 <- imputed_data$Fitur2
+data_clean$Fitur3 <- imputed_data$Fitur3
+
+# Memeriksa hasil
+head(data_clean[, c("Fitur", "Fitur2", "Fitur3")])
+```
+
+## Data Visualisasi
+```{r}
+options(scipen=999)
+##Berdasarkan data yang telah kami scrapping
+
+## Distribusi Harga Sewa Kendaraan
+ggplot(data_clean, aes(x = Harga)) +
+  geom_histogram(binwidth = 50000, fill = "skyblue", color = "black") + 
+  scale_x_continuous(
+    breaks = seq(0, 3000000, by = 500000),  
+    limits = c(0, 4000000)                  
+  ) +
+  labs(title = "Distribusi Harga Sewa Kendaraan", x = "Harga (IDR)", y = "Jumlah Kendaraan") +
+  theme_minimal()
+
+
+
+```
+
+## Berdasarkan data rentang mayoritas kendaraan yang disewakan ada di kisaran 250.000 sampai 450.000
+
+```{r}
+## Perbandingan data Mobil yang disewakan dengan sopir dan lepas kunci
+data_jumlah = data_clean %>% group_by(`Lepas Kunci`, Sopir) %>% summarise(Jumlah = n())
+
+ggplot(data_jumlah, 
+  aes(x = `Lepas Kunci`, y = Jumlah, fill = Sopir)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Layanan Lepas Kunci vs Dengan Sopir", x = "Lepas Kunci", y = "Jumlah Kendaraan") +
+  theme_minimal()
+
+
+```
+
+## Dari hasil ini bisa disimpulkan para vendor bisa dibilang memiliki fasilitas untuk semua kalangan, mau disopikan atau mau setir sendiri
+
+```{r}
+avg_harga_hari = data_clean %>% group_by(Hari) %>% summarise(Rata_Harga = mean(Harga, na.rm = TRUE))
+
+ggplot(avg_harga_hari, aes(x = Hari, y = Rata_Harga)) +
+  geom_line(group = 1, color = "blue", size = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "Rata-Rata Harga Berdasarkan Hari", x = "Hari", y = "Rata-Rata Harga (IDR)") +
+  theme_minimal()
+
+data_awal %>% count(Hari)
+
+```
+## Bisa disimpulkan bahwa di hari weekend terpantau harga cukup naik, sedangkan hari kamis cenderung dibawah
+
+```{r}
+#Banyaknya Kendaraan tiap Vendor 
+
+vendor_count = data_clean %>% count(Vendor) 
+
+ggplot(vendor_count, aes(x = reorder(Vendor, -n), y = n, fill = Vendor)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +  
+  labs(
+    title = "Jumlah Kendaraan per Vendor",
+    x = "Vendor",
+    y = "Jumlah Kendaraan"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+## Disimpulkan bahwa Sheyco Tour memiliki jumlah kendaraan paling banyak
+
+```{r}
+rata_harga_per_vendor = data_clean %>% group_by(Vendor) %>% summarise(Average_Price = mean(Harga, na.rm = TRUE)) 
+
+# Plot rata-rata harga per vendor
+ggplot(rata_harga_per_vendor, aes(x = reorder(Vendor, -Average_Price), y = Average_Price, fill = Vendor)) +
+  geom_bar(stat = "identity", show.legend = FALSE) +
+  labs(
+    title = "Harga Rata-Rata Tiap Vendor",
+    x = "Vendor",
+    y = "Harga Rata-Rata (IDR)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  
+  scale_y_continuous(labels = scales::comma)
+
+```
+## Berdasarkan data, jika disandingkan dengan visualisasi data sebelumnya Sheyco Tour memiliki rata rata harga yang cukup terjangkau, namun lebih terjangkau Jogja Tour 72 walau dengan armada yang dibawah Sheyco tour
+
+```{r}
+# Heatmap
+heatmap_data = data_clean %>% group_by(Vendor, Nama_Kendaraan) %>% summarise(Count = n()) %>% ungroup()
+
+# Plot heatmap
+ggplot(heatmap_data, aes(x = Vendor, y = Nama_Kendaraan, fill = Count)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(
+    title = "Jumlah Kendaraan per Vendor dan Tipe Mobil",
+    x = "Vendor",
+    y = "Tipe Mobil",
+    fill = "Jumlah"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+```{r}
+heatmap_data = data_clean %>%
+  group_by(Vendor, Nama_Kendaraan) %>%
+  summarise(Average_Harga = mean(Harga, na.rm = TRUE)) %>%
+  ungroup()
+
+# Plot heatmap
+ggplot(heatmap_data, aes(x = Vendor, y = Nama_Kendaraan, fill = Average_Harga)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "red") +
+  labs(
+    title = "Rata-Rata Harga Sewa per Vendor dan Tipe Mobil",
+    x = "Vendor",
+    y = "Tipe Mobil",
+    fill = "Harga Rata-Rata (IDR)"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+```{r}
+data_rating = read_xlsx("rating_kendaraan.xlsx")
+
+data_gabung = inner_join(data_clean, data_rating, by = "Nama_Kendaraan")
+data_gabung
+```
+
+## MODELLING PAKAi Content-Based Filtering dengan Cosine Similarity
+```{r}
+library(proxy)
+library(stringr)
+library(tm)
+
+user_price = 320000
+user_keyword = "Honda"
+
+## Filter berdasar kata kunci
+
+```
+
+```{r}
+
+filtered_data <- data_clean %>%
+  filter(Harga <= user_price) %>%
+  filter(str_detect(Fitur, user_keyword) | 
+         str_detect(Nama_Kendaraan, user_keyword) | 
+         str_detect(Fitur2, user_keyword) | 
+         str_detect(Fitur3, user_keyword))
+
+# Gabungkan Nama Kendaraan dan Fasilitas dalam satu kolom baru
+filtered_data <- filtered_data %>%
+  mutate(combined_text = paste(
+    ifelse(is.na(Nama_Kendaraan), "", Nama_Kendaraan),
+    ifelse(is.na(Fitur), "", Fitur),
+    ifelse(is.na(Fitur2), "", Fitur2),
+    ifelse(is.na(Fitur3), "", Fitur3),
+    sep = " "
+  ))
+```
+
+
+```{r}
+corpus <- Corpus(VectorSource(filtered_data$combined_text))
+
+# Hapus stopwords dan proses teks
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("en"))
+
+dtm <- DocumentTermMatrix(corpus)
+
+# Menghitung Cosine Similarity antar kendaraan
+cosine_sim <- proxy::simil(as.matrix(dtm), method = "cosine")
+
+# Pastikan cosine_sim adalah matriks dua dimensi
+cosine_sim <- as.matrix(cosine_sim)
+
+# Ambil nilai similarity dengan kendaraan pertama (baris pertama)
+similarity_scores <- cosine_sim[1, ]
+
+threshold <- 0.8  # Hanya kendaraan dengan similarity >= 0.8
+top_recommendations <- which(similarity_scores >= threshold)
+
+# Mendapatkan 10 rekomendasi kendaraan berdasarkan urutan similarity
+recommended_vehicles <- filtered_data[top_recommendations, ]
+
+# Tampilkan 10 rekomendasi
+recommended_vehicles
+```
+
+## EVALUASI menggunakan Precision, Recall, dan F1-Score
+```{r}
+# Actual relevance untuk semua kendaraan
+actual_relevant <- ifelse(data_clean$Harga <= user_price & 
+                          (str_detect(data_clean$Nama_Kendaraan, user_keyword) | str_detect(data_clean$Fitur, user_keyword)), 1, 0)
+
+# Rekomendasi relevan berdasarkan filter harga dan kata kunci
+recommended_relevant <- ifelse(data_clean$Nama_Kendaraan %in% filtered_data$Nama_Kendaraan, 1, 0)
+
+# Menghitung jumlah actual_relevant dan recommended_relevant tanpa NA
+actual_relevant_sum <- sum(actual_relevant == 1, na.rm = TRUE)  # Mengabaikan NA
+recommended_relevant_sum <- sum(recommended_relevant == 1, na.rm = TRUE)  # Mengabaikan NA
+
+# Cek apakah actual_relevant dan recommended_relevant memiliki elemen yang relevan
+if (actual_relevant_sum == 0) {
+  print("Tidak ada kendaraan relevan dalam data")
+} else if (recommended_relevant_sum == 0) {
+  print("Tidak ada kendaraan relevan yang direkomendasikan")
+} else {
+  # Menghitung True Positives, False Positives, True Negatives, dan False Negatives
+  TP <- sum(actual_relevant == 1 & recommended_relevant == 1, na.rm = TRUE)
+  FP <- sum(actual_relevant == 0 & recommended_relevant == 1, na.rm = TRUE)
+  TN <- sum(actual_relevant == 0 & recommended_relevant == 0, na.rm = TRUE)
+  FN <- sum(actual_relevant == 1 & recommended_relevant == 0, na.rm = TRUE)
+
+  # Menghindari pembagian dengan nol
+  precision <- ifelse((TP + FP) == 0, 0, TP / (TP + FP))
+  recall <- ifelse((TP + FN) == 0, 0, TP / (TP + FN))
+  f1_score <- ifelse((precision + recall) == 0, 0, 2 * (precision * recall) / (precision + recall))
+
+  # Menghitung Coverage
+  total_items <- length(actual_relevant)  # Jumlah total kendaraan dalam katalog
+  recommended_items <- sum(recommended_relevant, na.rm = TRUE)  # Jumlah kendaraan yang direkomendasikan
+
+  coverage <- recommended_items / total_items
+
+  # Menampilkan hasil evaluasi
+  cat("Precision: ", precision, "\n")
+  cat("Recall: ", recall, "\n")
+  cat("F1-Score: ", f1_score, "\n")
+  cat("Coverage: ", coverage, "\n")
+}
+
+```
+```{r}
+keyword <- "Innova"  # Kata kunci input
+budget <- 500000  # Batas harga input
+
+data_akhir <- data_clean %>%
+  mutate(
+    Fitur = paste(Fitur, Fitur2, Fitur3, sep = ", ") %>%      # Gabungkan dengan koma
+      gsub(", NA|NA,|, NA,", "", .) %>%                      # Hilangkan "NA" jika ada
+      gsub(",\\s+", ", ", .)                                 # Hilangkan spasi berlebih
+  ) %>%
+  select(-Fitur2, -Fitur3) 
+
+
+# 1. Filter berdasarkan input pengguna
+filtered_data <- data_akhir %>%
+  filter(
+   (grepl(keyword, Nama_Kendaraan, ignore.case = TRUE) |
+     grepl(keyword, Fitur, ignore.case = TRUE)) &         
+    Harga <= budget                                                       
+  )
+
+# 2. Normalisasi fitur numerik
+normalized_data <- filtered_data %>%
+  mutate(
+    Norm_Rating = Rating / max(Rating, na.rm = TRUE),       # Normalisasi Rating
+    Norm_Review = log1p(Review) / max(log1p(Review)),      # Normalisasi log(Review)
+    Norm_Order = log1p(Order) / max(log1p(Order))          # Normalisasi log(Order)
+  )
+
+# 3. Membuat skor agregasi
+# Bobot untuk masing-masing fitur
+w_rating <- 0.4
+w_review <- 0.3
+w_order <- 0.3
+
+scored_data <- normalized_data %>%
+  mutate(
+    Score = (w_rating * Norm_Rating) +
+            (w_review * Norm_Review) +
+            (w_order * Norm_Order)
+  ) %>%
+  arrange(desc(Score))  # Urutkan berdasarkan skor tertinggi
+
+top_10_recommendations <- head(scored_data, 10)
+
+# 5. Hasil rekomendasi
+cat("10 Rekomendasi Terbaik:\n")
+print(top_10_recommendations %>% select(Nama_Kendaraan, Harga, Vendor ,Rating, Review, Order, Score))
+
+```
+```{r}
+evaluate_recommendations <- function(actual_relevant, recommended_relevant) {
+  # Menghitung True Positives, False Positives, True Negatives, dan False Negatives
+  TP <- sum(actual_relevant == 1 & recommended_relevant == 1, na.rm = TRUE)
+  FP <- sum(actual_relevant == 0 & recommended_relevant == 1, na.rm = TRUE)
+  TN <- sum(actual_relevant == 0 & recommended_relevant == 0, na.rm = TRUE)
+  FN <- sum(actual_relevant == 1 & recommended_relevant == 0, na.rm = TRUE)
+
+  # Menghindari pembagian dengan nol
+  precision <- ifelse((TP + FP) == 0, 0, TP / (TP + FP))
+  recall <- ifelse((TP + FN) == 0, 0, TP / (TP + FN))
+  f1_score <- ifelse((precision + recall) == 0, 0, 2 * (precision * recall) / (precision + recall))
+
+  # Menghitung Coverage
+  total_items <- length(actual_relevant)  # Jumlah total kendaraan dalam katalog
+  recommended_items <- sum(recommended_relevant, na.rm = TRUE)  # Jumlah kendaraan yang direkomendasikan
+
+  coverage <- recommended_items / total_items
+
+  # Menampilkan hasil evaluasi
+  cat("Precision: ", precision, "\n")
+  cat("Recall: ", recall, "\n")
+  cat("F1-Score: ", f1_score, "\n")
+  cat("Coverage: ", coverage, "\n")
+}
+
+actual_relevant <- ifelse(grepl(keyword, data_akhir$Nama_Kendaraan, ignore.case = TRUE) |
+                           grepl(keyword, data_akhir$Fitur, ignore.case = TRUE), 1, 0)
+
+# Membuat kolom 'recommended_relevant' untuk menunjukkan apakah kendaraan ada dalam hasil rekomendasi
+recommended_relevant <- ifelse(data_akhir$Nama_Kendaraan %in% top_10_recommendations$Nama_Kendaraan, 1, 0)
+
+# Menjalankan evaluasi
+evaluate_recommendations(actual_relevant, recommended_relevant)
+```
+
+
+
+```{r}
+library(shiny)
+library(bslib)
+library(shinyWidgets)
+library(dplyr)
+library(readxl)
+library(DT)
+
+# UI
+ui <- fluidPage(
+    theme = bs_theme(
+        bg = "#f7f7f7", 
+        fg = "#333333",  
+        primary = "#0d6efd",
+        secondary = "#6c757d",
+        base_font = font_google("Lato"),  
+        heading_font = font_google("Roboto Slab") 
+    ),
+    tags$head(
+        tags$style(HTML("
+            body {
+                background-color: #f7f7f7;
+            }
+            .shiny-input-container {
+                margin-bottom: 20px;
+            }
+            .tab-content h4 {
+                color: #0d6efd;
+                margin-top: 10px;
+                font-weight: bold;
+            }
+            .panel-heading {
+                background-color: #e9ecef;
+                padding: 10px 15px;
+                border-radius: 5px;
+                font-size: 16px;
+                color: #333333;
+                font-family: 'Roboto Slab';
+            }
+            .title-header {
+                text-align: center;
+                color: #0d6efd;
+                margin-top: 30px; 
+                margin-bottom: 20px;
+            }
+        "))
+    ),
+    titlePanel(
+        div(
+            HTML("<h1 class='title-header'><i class='fas fa-car'></i> Rekomendasi Sewa Mobil</h1>")
+        )
+    ),
+    sidebarLayout(
+        sidebarPanel(
+            HTML("<h4 style='color: #333333;'>Kriteria Pencarian</h4>"),
+            textInput("keyword", "Keyword (tipe mobil, fitur, dll.)", placeholder = "Contoh: Honda"),
+            numericInput("budget", "Harga Maksimal (IDR)", value = 500000, min = 0),
+            sliderInput("min_rating", "Rating Minimal", min = 0, max = 5, value = 3, step = 0.1),
+            actionBttn(
+                inputId = "submit",
+                label = "Cari",
+                style = "jelly",
+                color = "primary",
+                icon = icon("search")
+            ),
+            br(),
+            br(),
+            helpText("Masukkan kriteria pencarian untuk menemukan mobil yang sesuai."),
+            div(HTML("<hr>")),
+            div(
+                HTML("<p style='color: #6c757d; font-size: 12px;'>Aplikasi ini membantu Anda memilih kendaraan sewa terbaik berdasarkan data terkini.</p>")
+            )
+        ),
+        mainPanel(
+            tabsetPanel(
+                tabPanel(
+                    "Hasil Rekomendasi",
+                    HTML("<h4 style='color: #333333;'>Rekomendasi Mobil</h4>"),
+                    DTOutput("recommend_table")
+                ),
+                tabPanel(
+                    "Data Mentah",
+                    HTML("<h4 style='color: #333333;'>Data Asli</h4>"),
+                    DTOutput("raw_data")
+                )
+            )
+        )
+    )
+)
+
+# Server
+server <- function(input, output, session) {
+    # Membaca dataset dari file lokal
+    dataset <- reactive({
+        read_excel("Dataset.xlsx") %>% 
+            select(Field1, Field2, Field3, Vendor, Rating, Review, Order, Fitur, Fitur2, Fitur3, Harga, Hari, `Lepas Kunci`, Sopir) %>%
+            rename(
+                Nama_Kendaraan = Field1,
+                Bagasi = Field2,
+                Penumpang = Field3
+            )
+    })
+    
+    # Preprocessing dataset
+    processed_data <- reactive({
+        data <- dataset()
+        data <- data %>%
+            mutate(
+                Harga = as.numeric(gsub("IDR ", "", gsub("\\.", "", Harga))),
+                Rating = as.numeric(gsub(",", ".", gsub(".*\\s", "", Rating))),
+                Review = as.numeric(gsub("[^0-9]", "", Review))
+            )
+        return(data)
+    })
+    
+    # Rekomendasi berdasarkan keyword, budget, dan rating
+    recommendation <- reactive({
+        req(input$submit)  # Tunggu tombol 'Cari' ditekan
+        isolate({
+            hasil <- processed_data() %>%
+                filter(
+                    (grepl(input$keyword, Nama_Kendaraan, ignore.case = TRUE) |
+                     grepl(input$keyword, Fitur, ignore.case = TRUE)) &
+                    Harga <= input$budget &
+                    Rating >= input$min_rating
+                )
+            if (nrow(hasil) == 0) {
+                showModal(modalDialog(
+                    title = "Tidak Ada Hasil",
+                    "Tidak ditemukan mobil yang cocok dengan kriteria Anda.",
+                    easyClose = TRUE,
+                    footer = modalButton("Tutup")
+                ))
+            }
+            return(hasil)
+        })
+    })
+    
+    # Menampilkan hasil rekomendasi
+    output$recommend_table <- renderDT({
+        req(recommendation())
+        datatable(recommendation(), options = list(pageLength = 10))
+    })
+    
+    # Menampilkan data mentah
+    output$raw_data <- renderDT({
+        datatable(processed_data(), options = list(pageLength = 10))
+    })
+}
+
+# Menjalankan aplikasi
+shinyApp(ui = ui, server = server)
+
+```
+
+```{r}
+
+
+```
+
