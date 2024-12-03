@@ -1,6 +1,6 @@
 ---
 title: "Project"
-author: "Muhammad Oscar Fileas J"
+author: "Kelompok"
 date: "2024-12-02"
 output: word_document
 ---
@@ -69,6 +69,8 @@ data_clean$Fitur3 <- imputed_data$Fitur3
 
 # Memeriksa hasil
 head(data_clean[, c("Fitur", "Fitur2", "Fitur3")])
+
+
 ```
 
 ## Data Visualisasi
